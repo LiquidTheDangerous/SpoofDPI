@@ -1,12 +1,14 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
 
+	"github.com/jackc/puddle/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/xvzc/SpoofDPI/dns"
 	"github.com/xvzc/SpoofDPI/packet"
@@ -21,9 +23,109 @@ type Proxy struct {
 	windowSize     int
 	allowedPattern []*regexp.Regexp
 	bufferSize     int
+	bufferProvider bufferProvider
 }
 
-func New(config *util.Config) *Proxy {
+type bufferWrapper interface {
+	getBuffer() []byte
+	release()
+}
+
+type simpleBufferWrapper struct {
+	buffer []byte
+}
+
+type puddleManagedBufferWrapper struct {
+	resource *puddle.Resource[*[]byte]
+}
+
+func (s *simpleBufferWrapper) getBuffer() []byte {
+	return s.buffer
+}
+
+func (s *simpleBufferWrapper) release() {
+	// do nothing
+}
+
+func (s *puddleManagedBufferWrapper) getBuffer() []byte {
+	return *s.resource.Value()
+}
+
+func (s *puddleManagedBufferWrapper) release() {
+	s.resource.Release()
+}
+
+type BufferProvider bufferProvider
+type bufferProvider interface {
+	getBufferHolder() (bufferWrapper, error)
+	putBufferHolder(wrapper bufferWrapper)
+}
+
+type simpleBufferProvider struct {
+	requestedSize int
+}
+
+func (s *simpleBufferProvider) getBufferHolder() (bufferWrapper, error) {
+	return &simpleBufferWrapper{
+		buffer: make([]byte, s.requestedSize),
+	}, nil
+}
+
+func (s *simpleBufferProvider) putBufferHolder(wrapper bufferWrapper) {
+	wrapper.release()
+	return
+}
+
+type poolBufferProvider struct {
+	pool *puddle.Pool[*[]byte]
+}
+
+func (p *poolBufferProvider) getBufferHolder() (bufferWrapper, error) {
+	acquire, err := p.pool.Acquire(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	return &puddleManagedBufferWrapper{
+		resource: acquire,
+	}, nil
+}
+
+func (p *poolBufferProvider) putBufferHolder(wrapper bufferWrapper) {
+	wrapper.release()
+	return
+}
+
+func newPoolBufferProvider(maxPoolSize int32, requestedBufferSize int32) (*poolBufferProvider, error) {
+	pool, err := puddle.NewPool(&puddle.Config[*[]byte]{
+		Constructor: func(context context.Context) (res *[]byte, err error) {
+			bytes := make([]byte, requestedBufferSize)
+			return &bytes, nil
+		},
+		Destructor: func(res *[]byte) {
+			*res = nil
+		},
+		MaxSize: maxPoolSize,
+	},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &poolBufferProvider{
+		pool: pool,
+	}, nil
+}
+
+func newSimpleBufferProvider(requestedBufferSize int32) *simpleBufferProvider {
+	return &simpleBufferProvider{
+		requestedSize: int(requestedBufferSize),
+	}
+}
+
+func New(config *util.Config) (*Proxy, error) {
+	provider, err := newBufferProvider(config)
+	if err != nil {
+		return nil, err
+	}
 	return &Proxy{
 		addr:           *config.Addr,
 		port:           *config.Port,
@@ -32,6 +134,16 @@ func New(config *util.Config) *Proxy {
 		allowedPattern: config.AllowedPattern,
 		resolver:       dns.NewResolver(config),
 		bufferSize:     *config.BufferSize,
+		bufferProvider: provider,
+	}, nil
+}
+
+func newBufferProvider(config *util.Config) (bufferProvider, error) {
+	if *config.UseSharedBufferPool {
+		maxPoolSize := config.SharedBufferPoolSize
+		return newPoolBufferProvider(int32(*maxPoolSize), int32(*config.BufferSize))
+	} else {
+		return newSimpleBufferProvider(int32(*config.BufferSize)), nil
 	}
 }
 

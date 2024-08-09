@@ -61,7 +61,7 @@ func (pxy *Proxy) handleHttps(lConn *net.TCPConn, exploit bool, initPkt *packet.
 	// lConn.SetLinger(3)
 	// rConn.SetLinger(3)
 
-	go Serve(rConn, lConn, "[HTTPS]", rConn.RemoteAddr().String(), initPkt.Domain(), pxy.timeout, pxy.bufferSize)
+	go Serve(rConn, lConn, "[HTTPS]", rConn.RemoteAddr().String(), initPkt.Domain(), pxy.timeout, pxy.bufferProvider)
 
 	if exploit {
 		log.Debug("[HTTPS] Writing chunked client hello to ", initPkt.Domain())
@@ -78,7 +78,7 @@ func (pxy *Proxy) handleHttps(lConn *net.TCPConn, exploit bool, initPkt *packet.
 		}
 	}
 
-	Serve(lConn, rConn, "[HTTPS]", lConn.RemoteAddr().String(), initPkt.Domain(), pxy.timeout, pxy.bufferSize)
+	Serve(lConn, rConn, "[HTTPS]", lConn.RemoteAddr().String(), initPkt.Domain(), pxy.timeout, pxy.bufferProvider)
 }
 
 func splitInChunks(bytes []byte, size int) [][]byte {

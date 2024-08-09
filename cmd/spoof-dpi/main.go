@@ -20,7 +20,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	pxy := proxy.New(config)
+	pxy, err := proxy.New(config)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if *config.Debug {
 		log.SetLevel(log.DebugLevel)
 	} else {
