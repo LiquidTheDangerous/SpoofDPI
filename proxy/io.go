@@ -41,9 +41,15 @@ func readBytesInternal(conn *net.TCPConn, dest []byte) (int, error) {
 	return totalRead, nil
 }
 
-func Serve(from *net.TCPConn, to *net.TCPConn, proto string, fd string, td string, timeout int, bufferSize int) {
+func Serve(from *net.TCPConn, to *net.TCPConn, proto string, fd string, td string, timeout int, bufferProvider bufferProvider) {
 	proto += " "
-	buf := make([]byte, bufferSize)
+	wrapper, err := bufferProvider.getBufferHolder()
+	defer bufferProvider.putBufferHolder(wrapper)
+	buf := wrapper.getBuffer()
+	if err != nil {
+		log.Error("Error getting buffer, resource is busy")
+		return
+	}
 	for {
 		if timeout > 0 {
 			from.SetReadDeadline(

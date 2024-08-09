@@ -10,19 +10,21 @@ import (
 )
 
 type Config struct {
-	Addr           *string
-	Port           *int
-	DnsAddr        *string
-	DnsPort        *int
-	EnableDoh      *bool
-	Debug          *bool
-	NoBanner       *bool
-	SystemProxy    *bool
-	Timeout        *int
-	AllowedPattern []*regexp.Regexp
-	WindowSize     *int
-	Version        *bool
-	BufferSize     *int
+	Addr                 *string
+	Port                 *int
+	DnsAddr              *string
+	DnsPort              *int
+	EnableDoh            *bool
+	Debug                *bool
+	NoBanner             *bool
+	SystemProxy          *bool
+	Timeout              *int
+	AllowedPattern       []*regexp.Regexp
+	WindowSize           *int
+	Version              *bool
+	BufferSize           *int
+	UseSharedBufferPool  *bool
+	SharedBufferPoolSize *int
 }
 
 type StringArray []string
@@ -60,6 +62,8 @@ fragmentation for the first data packet and the rest
 `)
 	config.Version = flag.Bool("v", false, "print spoof-dpi's version; this may contain some other relevant information")
 	config.BufferSize = flag.Int("buffer-size", 1024, "buffer size, in number of bytes, is the maximum amount of data that can be read at once from a remote resource")
+	config.UseSharedBufferPool = flag.Bool("use-shared-buffer-pool", false, "reuse allocated buffers for multiple connections")
+	config.SharedBufferPoolSize = flag.Int("shared-buffer-pool-size", 128, "shared buffer pool size. total allocated size is buffer-size*pool-size")
 	var allowedPattern StringArray
 	flag.Var(
 		&allowedPattern,
