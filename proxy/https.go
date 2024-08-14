@@ -45,8 +45,8 @@ func (pxy *Proxy) handleHttps(lConn *net.TCPConn, exploit bool, initPkt *packet.
 	log.Debug("[HTTPS] Sent 200 Connection Estabalished to ", lConn.RemoteAddr())
 
 	// Read client hello
-	m, err := ReadTlsMessage(lConn)
-	if err != nil || !IsClientHello(m) {
+	m, err := packet.ReadTlsMessage(lConn)
+	if err != nil || !packet.IsClientHello(m) {
 		log.Debug("[HTTPS] Error reading client hello from the client", err)
 		return
 	}

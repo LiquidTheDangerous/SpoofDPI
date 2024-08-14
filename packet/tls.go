@@ -1,4 +1,4 @@
-package proxy
+package packet
 
 import (
 	"encoding/binary"
